@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" width="180" height="180" alt="mcp-buttplug logo" />
+  <img src="logo.svg" width="160" height="160" alt="mcp-buttplug" />
 </p>
 
 <h1 align="center">mcp-buttplug</h1>
@@ -18,25 +18,58 @@ An [MCP](https://modelcontextprotocol.io) server that connects Claude Code (or a
 
 The LLM decides what you feel, and when.
 
-## Prerequisites
+## Install Intiface Central
 
-- [Bun](https://bun.sh) runtime
-- [Intiface Central](https://intiface.com/central/) — GUI server for buttplug.io (free, runs on macOS/Windows/Linux)
-- A [supported device](https://iostindex.com/?filter0ButtplugSupport=7) connected via Bluetooth/USB
+Intiface Central is the server that talks to your hardware. You need it running before using mcp-buttplug.
 
-## Install
+<table>
+<tr>
+<td><strong>macOS</strong></td>
+<td>
+
+[Download from Mac App Store](https://apps.apple.com/us/app/intiface-central/id6444728067) (requires macOS 11.0+, Apple Silicon)
+
+Or download directly from [intiface.com/central](https://intiface.com/central/)
+
+</td>
+</tr>
+<tr>
+<td><strong>Windows</strong></td>
+<td>
+
+Download from [intiface.com/central](https://intiface.com/central/) or install via [Microsoft Store](https://www.microsoft.com/store/apps/9P246MQX7TRV)
+
+</td>
+</tr>
+<tr>
+<td><strong>Linux</strong></td>
+<td>
 
 ```bash
-git clone <this-repo>
+flatpak install flathub com.nonpolynomial.intiface_central
+```
+
+Or download AppImage from [intiface.com/central](https://intiface.com/central/)
+
+</td>
+</tr>
+</table>
+
+Once installed, open Intiface Central and click **Start Server**. It listens on `ws://127.0.0.1:12345` by default.
+
+## Install mcp-buttplug
+
+Requires [Bun](https://bun.sh) runtime.
+
+```bash
+git clone https://github.com/chiefautism/mcp-buttplug.git
 cd mcp-buttplug
 bun install
 ```
 
 ## Setup
 
-**1. Start Intiface Central** and click "Start Server" (defaults to `ws://127.0.0.1:12345`)
-
-**2. Add to Claude Code** — edit `~/.claude/settings.json`:
+Add to Claude Code — edit `~/.claude/settings.json`:
 
 ```json
 {
@@ -49,7 +82,7 @@ bun install
 }
 ```
 
-**3. Restart Claude Code.** The tools will be available immediately.
+Restart Claude Code. The tools are available immediately.
 
 ## Tools
 
@@ -90,7 +123,26 @@ All device parameters (intensity, speed, position) are normalized to `0.0`–`1.
 
 ## Supported Devices
 
-Anything supported by [buttplug.io](https://iostindex.com/?filter0ButtplugSupport=7) — Lovense, We-Vibe, Kiiroo, Satisfyer, Magic Motion, and [200+ more](https://iostindex.com/?filter0ButtplugSupport=7).
+750+ devices from 30+ brands. Anything in the [buttplug.io ecosystem](https://iostindex.com/?filter0ButtplugSupport=7) works.
+
+| Brand | Devices | Connection |
+|---|---|---|
+| **Lovense** | Lush, Hush, Edge, Nora, Max, Osci, Domi, Calor, Diamo, Ferri, Gravity, Flexer, Vulse, Solace, Hyphy | Bluetooth LE |
+| **We-Vibe** | Sync, Melt, Vector, Nova, Rave, Pivot, Verge, Chorus, Wish | Bluetooth LE |
+| **Kiiroo** | Onyx+, Pearl 2/3, Keon, FeelConnect, Titan, Cliona, OhMiBod Fuse | Bluetooth LE |
+| **Satisfyer** | Curvy, Love Triangle, Sexy Secret, Royal One, Double Joy, Mono Flex | Bluetooth LE (requires CSR dongle on Windows/Linux) |
+| **The Handy** | The Handy | Wi-Fi / API |
+| **Magic Motion** | Flamingo, Awaken, Equinox, Bobi, Nyx, Umi, Zenith | Bluetooth LE |
+| **MysteryVibe** | Crescendo, Tenuto, Poco | Bluetooth LE |
+| **Svakom** | Ella Neo, Connexion Series | Bluetooth LE |
+| **Hismith** | Series with Bluetooth adapter | Bluetooth LE / Serial |
+| **Vorze** | A10 Cyclone SA, Bach, UFO SA | Bluetooth LE / USB |
+| **Lelo** | F1s, Hugo, Tiani | Bluetooth LE |
+| **TCode** | OSR-2, SR-6, and DIY TCode devices | Serial / USB |
+| **Xinput** | Xbox controllers, gamepads (vibration motors) | USB |
+| **Buttplug** | Generic WebSocket devices, DIY hardware | WebSocket |
+
+Full searchable database: [iostindex.com](https://iostindex.com/?filter0ButtplugSupport=7)
 
 ## How It Works
 
