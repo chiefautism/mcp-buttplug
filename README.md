@@ -190,6 +190,14 @@ Claude Code ←→ MCP (stdio) ←→ mcp-buttplug ←→ WebSocket ←→ Intif
 
 The server maintains a persistent connection to Intiface Engine. Each MCP tool call translates to buttplug.io protocol commands sent to the device. Patterns like `pulse` and `wave` are composed from sequences of basic commands with timing.
 
+## Why
+
+I saw girls on TikTok gooning with AI chatbots. Text-only. No haptics. Just vibes and imagination.
+
+Thought — what if the chatbot could actually *touch* you? MCP gives LLMs tool use. Buttplug.io gives software device control. This glues them together. Now the AI doesn't just talk. It acts.
+
+That's it. That's the whole idea.
+
 ## License
 
 BSD-3-Clause
