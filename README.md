@@ -24,9 +24,11 @@ Vibe coders can now enjoy vibe coding with a vibe in the butt.
 
 I saw girls on TikTok gooning with AI chatbots. Text-only. No haptics. Just vibes and imagination.
 
+Also — I know many girls have toys. And many coders too ;)
+
 Thought — what if the chatbot could actually *touch* you? MCP gives LLMs tool use. Buttplug.io gives software device control. This glues them together. Now the AI doesn't just talk. It acts.
 
-That's it. That's the whole idea.
+That's it. That's the whole idea. The hardware is already in the drawer. This is just the software.
 
 ## How It Works
 
