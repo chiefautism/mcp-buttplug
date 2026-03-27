@@ -18,58 +18,66 @@ An [MCP](https://modelcontextprotocol.io) server that connects Claude Code (or a
 
 The LLM decides what you feel, and when.
 
-## Install Intiface Central
+## Getting Started
+
+### 1. Install Intiface Central
 
 Intiface Central is the server that talks to your hardware. You need it running before using mcp-buttplug.
 
-<table>
-<tr>
-<td><strong>macOS</strong></td>
-<td>
-
-[Download from Mac App Store](https://apps.apple.com/us/app/intiface-central/id6444728067) (requires macOS 11.0+, Apple Silicon)
-
-Or download directly from [intiface.com/central](https://intiface.com/central/)
-
-</td>
-</tr>
-<tr>
-<td><strong>Windows</strong></td>
-<td>
-
-Download from [intiface.com/central](https://intiface.com/central/) or install via [Microsoft Store](https://www.microsoft.com/store/apps/9P246MQX7TRV)
-
-</td>
-</tr>
-<tr>
-<td><strong>Linux</strong></td>
-<td>
-
+**macOS**
 ```bash
-flatpak install flathub com.nonpolynomial.intiface_central
+# Option A: Mac App Store (requires macOS 11.0+, Apple Silicon)
+open "https://apps.apple.com/us/app/intiface-central/id6444728067"
+
+# Option B: Direct download
+open "https://intiface.com/central/"
 ```
 
-Or download AppImage from [intiface.com/central](https://intiface.com/central/)
+**Windows**
+```powershell
+# Option A: Microsoft Store
+start "https://www.microsoft.com/store/apps/9P246MQX7TRV"
 
-</td>
-</tr>
-</table>
+# Option B: Direct download
+start "https://intiface.com/central/"
+```
 
-Once installed, open Intiface Central and click **Start Server**. It listens on `ws://127.0.0.1:12345` by default.
+**Linux**
+```bash
+# Option A: Flatpak
+flatpak install flathub com.nonpolynomial.intiface_central
 
-## Install mcp-buttplug
+# Option B: AppImage from https://intiface.com/central/
+```
 
-Requires [Bun](https://bun.sh) runtime.
+### 2. Start the server
+
+Open Intiface Central → click **Start Server**.
+
+It listens on `ws://127.0.0.1:12345` by default. Leave it running.
+
+### 3. Install mcp-buttplug
 
 ```bash
+# Install Bun if you don't have it
+curl -fsSL https://bun.sh/install | bash
+
+# Clone and install
 git clone https://github.com/chiefautism/mcp-buttplug.git
 cd mcp-buttplug
 bun install
 ```
 
-## Setup
+### 4. Add to Claude Code
 
-Add to Claude Code — edit `~/.claude/settings.json`:
+```bash
+# Open your Claude Code settings
+open ~/.claude/settings.json   # macOS
+# or: code ~/.claude/settings.json
+# or: nano ~/.claude/settings.json
+```
+
+Add the MCP server:
 
 ```json
 {
@@ -81,6 +89,8 @@ Add to Claude Code — edit `~/.claude/settings.json`:
   }
 }
 ```
+
+### 5. Go
 
 Restart Claude Code. The tools are available immediately.
 
