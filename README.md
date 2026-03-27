@@ -121,6 +121,34 @@ claude: [calls wave(from=0, to=0.8, duration_ms=10000)]
 
 All device parameters (intensity, speed, position) are normalized to `0.0`–`1.0`. Claude handles the mapping.
 
+### More ideas
+
+**Interactive fiction.** Claude writes a story and controls the device based on narrative tension. Rising action, climax, resolution — mapped to intensity curves in real-time. The story isn't just text anymore.
+
+```
+you: write me something intense
+
+claude: [narrates scene]
+        [calls wave(from=0.1, to=0.6, duration_ms=15000)]
+        [continues narrating, building tension]
+        [calls vibrate(intensity=0.9, duration_ms=3000)]
+        [calls wave(from=0.7, to=0.1, duration_ms=10000)]
+```
+
+**Voice-to-touch via other MCP servers.** Combine with a speech-to-text MCP — you talk, Claude interprets tone/mood/words, translates to haptic patterns. Whisper = gentle pulse. Moan = escalation. "Stop" = stop.
+
+**React to anything.** Claude can read webpages, APIs, files. Stock price moves? Vibrate on green candles. Sports score? Pulse on goals. Twitch chat? Map emote spam to intensity. Claude is the bridge between any data source and physical sensation.
+
+**Scheduled sessions.** Use Claude Code's cron triggers to schedule recurring patterns. Morning alarm that starts gentle and escalates. Meditation timer with breathing-synced waves. Reminder pulses throughout the day.
+
+**Multi-device orchestration.** If you have multiple devices, Claude can control them independently — different intensities, alternating patterns, synchronized or deliberately offset. One device responds to what you say, another follows a pre-set rhythm.
+
+**Biofeedback loop.** Pair with a heart rate MCP (smartwatch API). Claude reads your heart rate, adjusts intensity to keep you in a target zone — or deliberately pushes you past it.
+
+**Long-distance.** Two people, two devices, one Claude session. Person A types, Claude controls Person B's device. Or Claude mediates — reading both inputs and translating them into haptic responses for the other person.
+
+**The unhinged one.** Give Claude a system prompt with a persona. It decides everything — pacing, intensity, when to tease, when to stop, when to escalate. You don't control it. You just... experience it. The LLM has agency over your physical sensation and it uses context, timing, and your responses to make decisions. That's the thing that doesn't exist anywhere else.
+
 ## Supported Devices
 
 750+ devices from 30+ brands. Anything in the [buttplug.io ecosystem](https://iostindex.com/?filter0ButtplugSupport=7) works.
