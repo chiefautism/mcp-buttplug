@@ -18,6 +18,24 @@ An [MCP](https://modelcontextprotocol.io) server that connects Claude Code (or a
 
 The LLM decides what you feel, and when.
 
+Vibe coders can now enjoy vibe coding with a vibe in the butt.
+
+## Why
+
+I saw girls on TikTok gooning with AI chatbots. Text-only. No haptics. Just vibes and imagination.
+
+Thought — what if the chatbot could actually *touch* you? MCP gives LLMs tool use. Buttplug.io gives software device control. This glues them together. Now the AI doesn't just talk. It acts.
+
+That's it. That's the whole idea.
+
+## How It Works
+
+```
+Claude Code <-> MCP (stdio) <-> mcp-buttplug <-> WebSocket <-> Intiface Engine <-> Bluetooth/USB <-> Device
+```
+
+The server maintains a persistent connection to Intiface Engine. Each MCP tool call translates to buttplug.io protocol commands sent to the device. Patterns like `pulse` and `wave` are composed from sequences of basic commands with timing.
+
 ## Getting Started
 
 ### 1. Install Intiface Central
@@ -52,7 +70,7 @@ flatpak install flathub com.nonpolynomial.intiface_central
 
 ### 2. Start the server
 
-Open Intiface Central → click **Start Server**.
+Open Intiface Central -> click **Start Server**.
 
 It listens on `ws://127.0.0.1:12345` by default. Leave it running.
 
@@ -70,14 +88,7 @@ bun install
 
 ### 4. Add to Claude Code
 
-```bash
-# Open your Claude Code settings
-open ~/.claude/settings.json   # macOS
-# or: code ~/.claude/settings.json
-# or: nano ~/.claude/settings.json
-```
-
-Add the MCP server:
+Create or edit `~/.claude/.mcp.json`:
 
 ```json
 {
@@ -101,9 +112,9 @@ Restart Claude Code. The tools are available immediately.
 | `connect` | Connect to Intiface Engine via WebSocket |
 | `scan` | Discover devices (Bluetooth, USB, Serial) |
 | `devices` | List connected devices and their capabilities |
-| `vibrate` | Vibrate at intensity `0.0`–`1.0`, optional auto-stop timer |
-| `rotate` | Rotate at speed `0.0`–`1.0` |
-| `oscillate` | Oscillate at intensity `0.0`–`1.0` |
+| `vibrate` | Vibrate at intensity `0.0`-`1.0`, optional auto-stop timer |
+| `rotate` | Rotate at speed `0.0`-`1.0` |
+| `oscillate` | Oscillate at intensity `0.0`-`1.0` |
 | `linear` | Move to position over duration (stroker devices) |
 | `pulse` | Patterned pulses — count, on/off timing, intensity |
 | `wave` | Smooth ramp between two intensities over time |
@@ -118,7 +129,7 @@ Once connected, just talk to Claude. It has the tools — it'll figure it out.
 ```
 you: connect to my device and give me a gentle pulse
 
-claude: [calls connect] → [calls scan] → [calls pulse(intensity=0.3, count=3)]
+claude: [calls connect] -> [calls scan] -> [calls pulse(intensity=0.3, count=3)]
         Connected. Found your Lovense Lush 3. Sent 3 gentle pulses.
 ```
 
@@ -129,9 +140,9 @@ claude: [calls wave(from=0, to=0.8, duration_ms=10000)]
         [calls stop]
 ```
 
-All device parameters (intensity, speed, position) are normalized to `0.0`–`1.0`. Claude handles the mapping.
+All device parameters (intensity, speed, position) are normalized to `0.0`-`1.0`. Claude handles the mapping.
 
-### More ideas
+## Ideas
 
 **Interactive fiction.** Claude writes a story and controls the device based on narrative tension. Rising action, climax, resolution — mapped to intensity curves in real-time. The story isn't just text anymore.
 
@@ -149,7 +160,7 @@ claude: [narrates scene]
 
 **React to anything.** Claude can read webpages, APIs, files. Stock price moves? Vibrate on green candles. Sports score? Pulse on goals. Twitch chat? Map emote spam to intensity. Claude is the bridge between any data source and physical sensation.
 
-**Scheduled sessions.** Use Claude Code's cron triggers to schedule recurring patterns. Morning alarm that starts gentle and escalates. Meditation timer with breathing-synced waves. Reminder pulses throughout the day.
+**Vibe coding with vibes.** You're pair programming with Claude. Tests pass — reward pulse. Tests fail — nothing. Clean code — gentle hum. Spaghetti code — escalating buzz until you refactor. Pavlovian code quality. Your body learns the patterns before your conscious mind does. Vibe coders rejoice — now you can literally vibe while you vibe code.
 
 **Multi-device orchestration.** If you have multiple devices, Claude can control them independently — different intensities, alternating patterns, synchronized or deliberately offset. One device responds to what you say, another follows a pre-set rhythm.
 
@@ -181,22 +192,6 @@ claude: [narrates scene]
 | **Buttplug** | Generic WebSocket devices, DIY hardware | WebSocket |
 
 Full searchable database: [iostindex.com](https://iostindex.com/?filter0ButtplugSupport=7)
-
-## How It Works
-
-```
-Claude Code ←→ MCP (stdio) ←→ mcp-buttplug ←→ WebSocket ←→ Intiface Engine ←→ Bluetooth/USB ←→ Device
-```
-
-The server maintains a persistent connection to Intiface Engine. Each MCP tool call translates to buttplug.io protocol commands sent to the device. Patterns like `pulse` and `wave` are composed from sequences of basic commands with timing.
-
-## Why
-
-I saw girls on TikTok gooning with AI chatbots. Text-only. No haptics. Just vibes and imagination.
-
-Thought — what if the chatbot could actually *touch* you? MCP gives LLMs tool use. Buttplug.io gives software device control. This glues them together. Now the AI doesn't just talk. It acts.
-
-That's it. That's the whole idea.
 
 ## License
 
