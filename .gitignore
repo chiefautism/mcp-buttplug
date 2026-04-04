@@ -37,3 +37,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .claude/
 .cursor/
 CLAUDE.md
+
+# intiface-engine binary (downloaded at install)
+engine/
+
+# compiled Swift helpers
+rumble
+test-all-haptics

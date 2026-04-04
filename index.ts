@@ -2,52 +2,182 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import {
-  ButtplugClient,
-  ButtplugNodeWebsocketClientConnector,
-  DeviceOutput,
-} from "buttplug";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 const DEFAULT_WS = "ws://127.0.0.1:12345";
+const DEFAULT_PORT = 12345;
 
-let client: ButtplugClient | null = null;
+// --- Buttplug v3 WebSocket client (no npm dependency) ---
 
-async function ensureConnected(wsUrl?: string): Promise<ButtplugClient> {
-  if (client?.connected) return client;
-  client = new ButtplugClient("Claude Code Haptics");
-  const connector = new ButtplugNodeWebsocketClientConnector(
-    wsUrl ?? DEFAULT_WS
-  );
-  await client.connect(connector);
-  return client;
+let ws: WebSocket | null = null;
+let msgId = 0;
+let devices = new Map<number, { name: string; features: any }>();
+let engineProcess: ReturnType<typeof Bun.spawn> | null = null;
+let pendingResponses = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
+
+function nextId() { return ++msgId; }
+
+function send(msg: Record<string, any>): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return reject(new Error("Not connected"));
+    const id = Object.values(msg)[0].Id;
+    pendingResponses.set(id, { resolve, reject });
+    ws.send(JSON.stringify([msg]));
+    setTimeout(() => {
+      if (pendingResponses.has(id)) {
+        pendingResponses.delete(id);
+        reject(new Error("Timeout"));
+      }
+    }, 10000);
+  });
+}
+
+function handleMessage(data: string) {
+  const msgs = JSON.parse(data);
+  for (const msg of msgs) {
+    const type = Object.keys(msg)[0];
+    const body = msg[type];
+
+    if (body?.Id !== undefined && pendingResponses.has(body.Id)) {
+      const p = pendingResponses.get(body.Id)!;
+      pendingResponses.delete(body.Id);
+      if (type === "Error") p.reject(new Error(body.ErrorMessage));
+      else p.resolve(msg);
+    }
+
+    if (type === "DeviceAdded") {
+      devices.set(body.DeviceIndex, { name: body.DeviceName, features: body.DeviceMessages });
+    }
+    if (type === "DeviceRemoved") {
+      devices.delete(body.DeviceIndex);
+    }
+  }
+}
+
+async function connect(url: string = DEFAULT_WS): Promise<void> {
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+
+  // Try connecting directly first — if engine is already running, this works.
+  // If not, start engine and retry.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const socket = new WebSocket(url);
+        const timer = setTimeout(() => { socket.close(); reject(new Error("timeout")); }, 3000);
+        socket.onopen = async () => {
+          clearTimeout(timer);
+          ws = socket;
+          ws.onmessage = (e) => handleMessage(String(e.data));
+          ws.onclose = () => { ws = null; };
+          try {
+            await send({ RequestServerInfo: { Id: nextId(), ClientName: "buttplug-mcp", MessageVersion: 3 } });
+            resolve();
+          } catch (e) { reject(e); }
+        };
+        socket.onerror = () => { clearTimeout(timer); reject(new Error("refused")); };
+      });
+      return; // Connected!
+    } catch {
+      if (attempt === 0) {
+        await ensureEngine(); // Start engine and retry
+      } else {
+        throw new Error(`Cannot connect to ${url}`);
+      }
+    }
+  }
+}
+
+async function vibrate(deviceIndex: number, speed: number) {
+  const id = nextId();
+  await send({ ScalarCmd: { Id: id, DeviceIndex: deviceIndex, Scalars: [
+    { Index: 0, Scalar: speed, ActuatorType: "Vibrate" },
+    { Index: 1, Scalar: speed, ActuatorType: "Vibrate" },
+  ]}});
+}
+
+async function stopDevice(deviceIndex: number) {
+  await send({ StopDeviceCmd: { Id: nextId(), DeviceIndex: deviceIndex } });
+}
+
+async function stopAll() {
+  await send({ StopAllDevices: { Id: nextId() } });
+}
+
+async function startScanning() {
+  await send({ StartScanning: { Id: nextId() } });
+}
+
+async function stopScanning() {
+  await send({ StopScanning: { Id: nextId() } });
+}
+
+async function requestDeviceList() {
+  const resp = await send({ RequestDeviceList: { Id: nextId() } });
+  const list = resp?.DeviceList?.Devices ?? [];
+  for (const d of list) {
+    devices.set(d.DeviceIndex, { name: d.DeviceName, features: d.DeviceMessages });
+  }
 }
 
 function getDevice(index?: number) {
-  if (!client?.connected) throw new Error("Not connected to Intiface");
-  const devices = client.devices;
   if (devices.size === 0) throw new Error("No devices found. Run scan first.");
   if (index !== undefined) {
-    const dev = devices.get(index);
-    if (!dev) throw new Error(`Device ${index} not found`);
-    return dev;
+    const d = devices.get(index);
+    if (!d) throw new Error(`Device ${index} not found`);
+    return { index, ...d };
   }
-  return devices.values().next().value!;
+  const first = devices.entries().next().value!;
+  return { index: first[0], ...first[1] };
 }
+
+// --- Engine auto-launch ---
+
+const ENGINE_DIR = new URL("./engine", import.meta.url).pathname;
+// On macOS, prefer .app bundle (has Bluetooth entitlements for BLE)
+const ENGINE_BIN_PLAIN = join(ENGINE_DIR, process.platform === "win32" ? "intiface-engine.exe" : "intiface-engine");
+const ENGINE_BIN_APP = join(ENGINE_DIR, "IntifaceEngine.app", "Contents", "MacOS", "intiface-engine");
+const ENGINE_BIN = (process.platform === "darwin" && existsSync(ENGINE_BIN_APP)) ? ENGINE_BIN_APP : ENGINE_BIN_PLAIN;
+
+async function ensureEngine(port: number = DEFAULT_PORT): Promise<void> {
+  if (engineProcess) return; // Already started by us
+
+  if (!existsSync(ENGINE_BIN)) {
+    throw new Error("intiface-engine not found. Run 'bun run scripts/install-engine.ts' to build it.");
+  }
+
+  engineProcess = Bun.spawn([
+    ENGINE_BIN,
+    "--websocket-port", String(port),
+    "--use-sdl-gamepad",
+    "--use-bluetooth-le",
+    "--use-device-websocket-server",
+  ], { stdout: "ignore", stderr: "ignore" });
+
+  // Give it a moment to start
+  await new Promise((r) => setTimeout(r, 1500));
+}
+
+function killEngine() {
+  if (ws) { try { ws.close(); } catch {} ws = null; }
+  if (engineProcess) { engineProcess.kill(); engineProcess = null; }
+}
+
+process.on("exit", killEngine);
+process.on("SIGINT", () => { killEngine(); process.exit(0); });
+process.on("SIGTERM", () => { killEngine(); process.exit(0); });
 
 // --- MCP Server ---
 
-const server = new McpServer({
-  name: "buttplug",
-  version: "1.0.0",
-});
+const server = new McpServer({ name: "buttplug", version: "2.0.0" });
 
 server.tool(
   "connect",
-  "Connect to Intiface Engine (buttplug.io server). Must be running first.",
+  "Connect to Intiface Engine. Auto-launches our forked engine with gamepad + BLE support if not already running.",
   { ws_url: z.string().optional().describe("WebSocket URL, default ws://127.0.0.1:12345") },
   async ({ ws_url }) => {
     try {
-      await ensureConnected(ws_url);
+      await connect(ws_url ?? DEFAULT_WS);
       return { content: [{ type: "text", text: "Connected to Intiface Engine" }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: `Connection failed: ${e.message}` }], isError: true };
@@ -57,31 +187,21 @@ server.tool(
 
 server.tool(
   "scan",
-  "Scan for devices via Bluetooth/USB/etc. Scans for 5s by default.",
+  "Scan for devices — gamepads (Xbox/PS/Switch via SDL2), Bluetooth LE toys, USB devices. Scans for 5s by default.",
   { duration_ms: z.number().optional().describe("Scan duration in ms, default 5000") },
   async ({ duration_ms }) => {
     try {
-      const c = await ensureConnected();
-      await c.startScanning();
+      await connect();
+      await startScanning();
       await new Promise((r) => setTimeout(r, duration_ms ?? 5000));
-      try { await c.stopScanning(); } catch {}
+      try { await stopScanning(); } catch {}
+      await requestDeviceList();
 
-      const devs = [...c.devices.values()].map((d) => {
-        const outputs: string[] = [];
-        for (const [, f] of d.features) {
-          for (const key of Object.keys((f as any)._feature?.Output ?? {})) {
-            if (!outputs.includes(key)) outputs.push(key);
-          }
-        }
-        return `[${d.index}] ${d.name} (${outputs.join(", ") || "no outputs"})`;
-      });
-
+      const devs = [...devices.entries()].map(([i, d]) => `[${i}] ${d.name}`);
       return {
         content: [{
           type: "text",
-          text: devs.length
-            ? `Found ${devs.length} device(s):\n${devs.join("\n")}`
-            : "No devices found. Make sure your device is on and in pairing mode.",
+          text: devs.length ? `Found ${devs.length} device(s):\n${devs.join("\n")}` : "No devices found.",
         }],
       };
     } catch (e: any) {
@@ -92,27 +212,14 @@ server.tool(
 
 server.tool(
   "devices",
-  "List currently connected devices and their capabilities.",
+  "List currently connected devices.",
   {},
   async () => {
     try {
-      if (!client?.connected) return { content: [{ type: "text", text: "Not connected" }], isError: true };
-      const devs = [...client.devices.values()].map((d) => {
-        const caps: string[] = [];
-        for (const [, f] of d.features) {
-          const feat = (f as any)._feature as any;
-          for (const key of Object.keys(feat?.Output ?? {})) {
-            if (!caps.includes(key)) caps.push(key);
-          }
-          for (const key of Object.keys(feat?.Input ?? {})) {
-            if (!caps.includes(`input:${key}`)) caps.push(`input:${key}`);
-          }
-        }
-        return `[${d.index}] ${d.displayName ?? d.name} — ${caps.join(", ") || "unknown"}`;
-      });
-      return {
-        content: [{ type: "text", text: devs.length ? devs.join("\n") : "No devices" }],
-      };
+      if (!ws) return { content: [{ type: "text", text: "Not connected" }], isError: true };
+      await requestDeviceList();
+      const devs = [...devices.entries()].map(([i, d]) => `[${i}] ${d.name}`);
+      return { content: [{ type: "text", text: devs.length ? devs.join("\n") : "No devices" }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -121,27 +228,20 @@ server.tool(
 
 server.tool(
   "vibrate",
-  "Vibrate a device at given intensity (0.0-1.0). Optionally auto-stop after duration_ms.",
+  "Vibrate a device at given intensity (0.0-1.0). Works with gamepads and toys.",
   {
     intensity: z.number().min(0).max(1).describe("Vibration intensity 0.0 to 1.0"),
-    duration_ms: z.number().optional().describe("Auto-stop after this many ms. If omitted, vibrates until stop is called."),
+    duration_ms: z.number().optional().describe("Auto-stop after this many ms"),
     device_index: z.number().optional().describe("Device index, defaults to first device"),
   },
   async ({ intensity, duration_ms, device_index }) => {
     try {
       const dev = getDevice(device_index);
-      await dev.runOutput(DeviceOutput.Vibrate.percent(intensity));
+      await vibrate(dev.index, intensity);
       if (duration_ms) {
-        setTimeout(async () => {
-          try { await dev.stop(); } catch {}
-        }, duration_ms);
+        setTimeout(async () => { try { await stopDevice(dev.index); } catch {} }, duration_ms);
       }
-      return {
-        content: [{
-          type: "text",
-          text: `Vibrating ${dev.name} at ${Math.round(intensity * 100)}%${duration_ms ? ` for ${duration_ms}ms` : ""}`,
-        }],
-      };
+      return { content: [{ type: "text", text: `Vibrating ${dev.name} at ${Math.round(intensity * 100)}%${duration_ms ? ` for ${duration_ms}ms` : ""}` }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -150,7 +250,7 @@ server.tool(
 
 server.tool(
   "rotate",
-  "Rotate a device at given speed (0.0-1.0).",
+  "Rotate a device at given speed (0.0-1.0). For rotating toys.",
   {
     speed: z.number().min(0).max(1).describe("Rotation speed 0.0 to 1.0"),
     duration_ms: z.number().optional().describe("Auto-stop after this many ms"),
@@ -159,9 +259,9 @@ server.tool(
   async ({ speed, duration_ms, device_index }) => {
     try {
       const dev = getDevice(device_index);
-      await dev.runOutput(DeviceOutput.Rotate.percent(speed));
+      await send({ RotateCmd: { Id: nextId(), DeviceIndex: dev.index, Rotations: [{ Index: 0, Speed: speed, Clockwise: true }] } });
       if (duration_ms) {
-        setTimeout(async () => { try { await dev.stop(); } catch {} }, duration_ms);
+        setTimeout(async () => { try { await stopDevice(dev.index); } catch {} }, duration_ms);
       }
       return { content: [{ type: "text", text: `Rotating ${dev.name} at ${Math.round(speed * 100)}%` }] };
     } catch (e: any) {
@@ -181,9 +281,9 @@ server.tool(
   async ({ intensity, duration_ms, device_index }) => {
     try {
       const dev = getDevice(device_index);
-      await dev.runOutput(DeviceOutput.Oscillate.percent(intensity));
+      await send({ ScalarCmd: { Id: nextId(), DeviceIndex: dev.index, Scalars: [{ Index: 0, Scalar: intensity, ActuatorType: "Oscillate" }] } });
       if (duration_ms) {
-        setTimeout(async () => { try { await dev.stop(); } catch {} }, duration_ms);
+        setTimeout(async () => { try { await stopDevice(dev.index); } catch {} }, duration_ms);
       }
       return { content: [{ type: "text", text: `Oscillating ${dev.name} at ${Math.round(intensity * 100)}%` }] };
     } catch (e: any) {
@@ -203,10 +303,8 @@ server.tool(
   async ({ position, duration_ms, device_index }) => {
     try {
       const dev = getDevice(device_index);
-      await dev.runOutput(DeviceOutput.PositionWithDuration.percent(position, duration_ms));
-      return {
-        content: [{ type: "text", text: `Moving ${dev.name} to ${Math.round(position * 100)}% over ${duration_ms}ms` }],
-      };
+      await send({ LinearCmd: { Id: nextId(), DeviceIndex: dev.index, Vectors: [{ Index: 0, Duration: duration_ms, Position: position }] } });
+      return { content: [{ type: "text", text: `Moving ${dev.name} to ${Math.round(position * 100)}% over ${duration_ms}ms` }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -215,7 +313,7 @@ server.tool(
 
 server.tool(
   "pulse",
-  "Send a pattern of pulses. Useful for notifications or rhythmic feedback.",
+  "Send a pattern of pulses.",
   {
     intensity: z.number().min(0).max(1).describe("Pulse intensity 0.0 to 1.0"),
     pulse_ms: z.number().optional().describe("Duration of each pulse in ms, default 200"),
@@ -230,9 +328,9 @@ server.tool(
       const on = pulse_ms ?? 200;
       const off = pause_ms ?? 200;
       for (let i = 0; i < n; i++) {
-        await dev.runOutput(DeviceOutput.Vibrate.percent(intensity));
+        await vibrate(dev.index, intensity);
         await new Promise((r) => setTimeout(r, on));
-        await dev.stop();
+        await stopDevice(dev.index);
         if (i < n - 1) await new Promise((r) => setTimeout(r, off));
       }
       return { content: [{ type: "text", text: `Pulsed ${dev.name} ${n}x at ${Math.round(intensity * 100)}%` }] };
@@ -244,12 +342,12 @@ server.tool(
 
 server.tool(
   "wave",
-  "Ramp intensity up and/or down over time. Smooth wave pattern.",
+  "Ramp intensity up and/or down over time.",
   {
     from: z.number().min(0).max(1).describe("Starting intensity"),
     to: z.number().min(0).max(1).describe("Ending intensity"),
     duration_ms: z.number().describe("Total duration in ms"),
-    steps: z.number().optional().describe("Number of intermediate steps, default 20"),
+    steps: z.number().optional().describe("Number of steps, default 20"),
     device_index: z.number().optional().describe("Device index, defaults to first device"),
   },
   async ({ from, to, duration_ms, steps, device_index }) => {
@@ -258,18 +356,12 @@ server.tool(
       const n = steps ?? 20;
       const interval = duration_ms / n;
       for (let i = 0; i <= n; i++) {
-        const t = i / n;
-        const val = from + (to - from) * t;
-        await dev.runOutput(DeviceOutput.Vibrate.percent(Math.max(0, Math.min(1, val))));
+        const val = Math.max(0, Math.min(1, from + (to - from) * (i / n)));
+        await vibrate(dev.index, val);
         await new Promise((r) => setTimeout(r, interval));
       }
-      if (to === 0) await dev.stop();
-      return {
-        content: [{
-          type: "text",
-          text: `Wave on ${dev.name}: ${Math.round(from * 100)}% → ${Math.round(to * 100)}% over ${duration_ms}ms`,
-        }],
-      };
+      if (to === 0) await stopDevice(dev.index);
+      return { content: [{ type: "text", text: `Wave on ${dev.name}: ${Math.round(from * 100)}% → ${Math.round(to * 100)}% over ${duration_ms}ms` }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -282,13 +374,13 @@ server.tool(
   { device_index: z.number().optional().describe("Device index. If omitted, stops ALL devices.") },
   async ({ device_index }) => {
     try {
-      if (!client?.connected) return { content: [{ type: "text", text: "Not connected" }], isError: true };
+      if (!ws) return { content: [{ type: "text", text: "Not connected" }], isError: true };
       if (device_index !== undefined) {
         const dev = getDevice(device_index);
-        await dev.stop();
+        await stopDevice(dev.index);
         return { content: [{ type: "text", text: `Stopped ${dev.name}` }] };
       }
-      await client.stopAllDevices();
+      await stopAll();
       return { content: [{ type: "text", text: "Stopped all devices" }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: e.message }], isError: true };
@@ -303,8 +395,9 @@ server.tool(
   async ({ device_index }) => {
     try {
       const dev = getDevice(device_index);
-      const level = await dev.battery();
-      return { content: [{ type: "text", text: `${dev.name} battery: ${Math.round(level * 100)}%` }] };
+      const resp = await send({ SensorReadCmd: { Id: nextId(), DeviceIndex: dev.index, SensorIndex: 0, SensorType: "Battery" } });
+      const reading = resp?.SensorReading?.Data?.[0] ?? 0;
+      return { content: [{ type: "text", text: `${dev.name} battery: ${reading}%` }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: e.message }], isError: true };
     }
@@ -313,15 +406,17 @@ server.tool(
 
 server.tool(
   "disconnect",
-  "Disconnect from Intiface Engine.",
+  "Disconnect from Intiface Engine and stop it if we started it.",
   {},
   async () => {
     try {
-      if (client?.connected) {
-        await client.stopAllDevices();
-        await client.disconnect();
+      if (ws) {
+        try { await stopAll(); } catch {}
+        ws.close();
+        ws = null;
       }
-      client = null;
+      devices.clear();
+      killEngine();
       return { content: [{ type: "text", text: "Disconnected" }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: e.message }], isError: true };

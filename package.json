@@ -1,9 +1,10 @@
 {
-  "name": "mcp-buttplug",
+  "name": "buttplug-mcp",
   "module": "index.ts",
   "type": "module",
   "private": true,
   "scripts": {
+    "postinstall": "bun run scripts/install-engine.ts",
     "start": "bun run index.ts",
     "build": "bun build --target=bun index.ts --outfile=dist/server.js"
   },
@@ -14,7 +15,6 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.28.0",
-    "buttplug": "^4.0.0"
+    "@modelcontextprotocol/sdk": "^1.28.0"
   }
 }

@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="logo.svg" width="160" height="160" alt="mcp-buttplug" />
+  <img src="logo.svg" width="160" height="160" alt="buttplug-mcp" />
 </p>
 
-<h1 align="center">mcp-buttplug</h1>
+<h1 align="center">buttplug-mcp</h1>
 
 <p align="center">
-  <strong>MCP server that gives Claude direct control over intimate hardware via <a href="https://buttplug.io">buttplug.io</a></strong>
+  <strong>MCP server that gives Claude direct control over intimate hardware and game controllers via <a href="https://buttplug.io">buttplug.io</a></strong>
 </p>
 
 <p align="center">
@@ -16,79 +16,53 @@
 
 An [MCP](https://modelcontextprotocol.io) server that connects Claude Code (or any MCP client) to [buttplug.io](https://buttplug.io) — the open-source intimate hardware control library. Claude gets tools to discover, control, and orchestrate haptic devices in real-time.
 
+**Now with gamepad support.** Xbox, PlayStation, and Switch controllers work as vibration devices on macOS, Windows, and Linux — powered by our [SDL2 fork of intiface-engine](https://github.com/chiefautism/buttplug/tree/sdl-gamepad-support).
+
 The LLM decides what you feel, and when.
-
-Vibe coders can now enjoy vibe coding with a vibe in the butt.
-
-## Why
-
-I saw girls on TikTok gooning with AI chatbots. Text-only. No haptics. Just vibes and imagination.
-
-Also — I know many girls have toys. And many coders too ;)
-
-Thought — what if the chatbot could actually *touch* you? MCP gives LLMs tool use. Buttplug.io gives software device control. This glues them together. Now the AI doesn't just talk. It acts.
-
-That's it. That's the whole idea. The hardware is already in the drawer. This is just the software.
 
 ## How It Works
 
 ```
-Claude Code <-> MCP (stdio) <-> mcp-buttplug <-> WebSocket <-> Intiface Engine <-> Bluetooth/USB <-> Device
+Claude Code <-> MCP (stdio) <-> buttplug-mcp <-> WebSocket <-> intiface-engine <-> SDL2/BLE/USB <-> Device
 ```
 
-The server maintains a persistent connection to Intiface Engine. Each MCP tool call translates to buttplug.io protocol commands sent to the device. Patterns like `pulse` and `wave` are composed from sequences of basic commands with timing.
+buttplug-mcp auto-launches our forked intiface-engine when you call `connect`. No separate server to install or run. The engine handles:
+
+- **Gamepads** (Xbox/PS/Switch) via SDL2 — cross-platform rumble
+- **Bluetooth LE toys** (Lovense, We-Vibe, etc) via btleplug
+- **USB/Serial devices** via platform drivers
 
 ## Getting Started
 
-### 1. Install Intiface Central
+### Prerequisites
 
-Intiface Central is the server that talks to your hardware. You need it running before using mcp-buttplug.
+- [Bun](https://bun.sh) runtime
+- [Rust toolchain](https://rustup.rs) (for building intiface-engine)
+- [cmake](https://cmake.org) (for SDL2)
 
-**macOS**
-```bash
-# Option A: Mac App Store (requires macOS 11.0+, Apple Silicon)
-open "https://apps.apple.com/us/app/intiface-central/id6444728067"
-
-# Option B: Direct download
-open "https://intiface.com/central/"
-```
-
-**Windows**
-```powershell
-# Option A: Microsoft Store
-start "https://www.microsoft.com/store/apps/9P246MQX7TRV"
-
-# Option B: Direct download
-start "https://intiface.com/central/"
-```
-
-**Linux**
-```bash
-# Option A: Flatpak
-flatpak install flathub com.nonpolynomial.intiface_central
-
-# Option B: AppImage from https://intiface.com/central/
-```
-
-### 2. Start the server
-
-Open Intiface Central -> click **Start Server**.
-
-It listens on `ws://127.0.0.1:12345` by default. Leave it running.
-
-### 3. Install mcp-buttplug
+### Install
 
 ```bash
 # Install Bun if you don't have it
 curl -fsSL https://bun.sh/install | bash
 
+# Install Rust if you don't have it
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install cmake
+# macOS: brew install cmake
+# Ubuntu: sudo apt install cmake
+# Windows: choco install cmake
+
 # Clone and install
-git clone https://github.com/chiefautism/mcp-buttplug.git
-cd mcp-buttplug
+git clone https://github.com/chiefautism/buttplug-mcp.git
+cd buttplug-mcp
 bun install
 ```
 
-### 4. Add to Claude Code
+`bun install` will automatically clone our [buttplug fork](https://github.com/chiefautism/buttplug/tree/sdl-gamepad-support) and build intiface-engine with SDL2 gamepad support. This takes ~2 minutes on first install.
+
+### Add to Claude Code
 
 Create or edit `~/.claude/.mcp.json`:
 
@@ -97,23 +71,39 @@ Create or edit `~/.claude/.mcp.json`:
   "mcpServers": {
     "buttplug": {
       "command": "bun",
-      "args": ["/absolute/path/to/mcp-buttplug/index.ts"]
+      "args": ["/absolute/path/to/buttplug-mcp/index.ts"]
     }
   }
 }
 ```
 
-### 5. Go
+### Go
 
 Restart Claude Code. The tools are available immediately.
+
+```
+you: connect and scan for devices
+
+claude: [calls connect] -> [calls scan]
+        Connected. Found your Xbox Wireless Controller.
+```
+
+### Gamepad Setup
+
+Connect your controller via **Bluetooth** (not USB — USB rumble is not supported on macOS):
+
+1. Press and hold the Xbox/PS button until it flashes
+2. Press the pairing button (small button near USB port on Xbox)
+3. Go to System Settings → Bluetooth → Connect
+4. In Claude Code: `connect` → `scan` → your controller appears
 
 ## Tools
 
 | Tool | Description |
 |---|---|
-| `connect` | Connect to Intiface Engine via WebSocket |
-| `scan` | Discover devices (Bluetooth, USB, Serial) |
-| `devices` | List connected devices and their capabilities |
+| `connect` | Connect to Intiface Engine (auto-launches if needed) |
+| `scan` | Discover devices (gamepads, Bluetooth, USB) |
+| `devices` | List connected devices |
 | `vibrate` | Vibrate at intensity `0.0`-`1.0`, optional auto-stop timer |
 | `rotate` | Rotate at speed `0.0`-`1.0` |
 | `oscillate` | Oscillate at intensity `0.0`-`1.0` |
@@ -122,17 +112,17 @@ Restart Claude Code. The tools are available immediately.
 | `wave` | Smooth ramp between two intensities over time |
 | `stop` | Stop one or all devices |
 | `battery` | Read device battery level |
-| `disconnect` | Disconnect from Intiface Engine |
+| `disconnect` | Disconnect and stop engine |
 
 ## Usage
 
 Once connected, just talk to Claude. It has the tools — it'll figure it out.
 
 ```
-you: connect to my device and give me a gentle pulse
+you: give me a gentle pulse
 
-claude: [calls connect] -> [calls scan] -> [calls pulse(intensity=0.3, count=3)]
-        Connected. Found your Lovense Lush 3. Sent 3 gentle pulses.
+claude: [calls vibrate(intensity=0.3)] -> [calls pulse(count=3)]
+        Sent 3 gentle pulses to your Xbox controller.
 ```
 
 ```
@@ -144,56 +134,44 @@ claude: [calls wave(from=0, to=0.8, duration_ms=10000)]
 
 All device parameters (intensity, speed, position) are normalized to `0.0`-`1.0`. Claude handles the mapping.
 
-## Ideas
+## Architecture
 
-**Interactive fiction.** Claude writes a story and controls the device based on narrative tension. Rising action, climax, resolution — mapped to intensity curves in real-time. The story isn't just text anymore.
+This project consists of two repositories:
 
-```
-you: write me something intense
+### buttplug-mcp (this repo)
+MCP server in TypeScript/Bun. Thin WebSocket client that speaks buttplug v3 protocol directly (no npm dependencies for device control). Auto-launches intiface-engine.
 
-claude: [narrates scene]
-        [calls wave(from=0.1, to=0.6, duration_ms=15000)]
-        [continues narrating, building tension]
-        [calls vibrate(intensity=0.9, duration_ms=3000)]
-        [calls wave(from=0.7, to=0.1, duration_ms=10000)]
-```
-
-**Voice-to-touch via other MCP servers.** Combine with a speech-to-text MCP — you talk, Claude interprets tone/mood/words, translates to haptic patterns. Whisper = gentle pulse. Moan = escalation. "Stop" = stop.
-
-**React to anything.** Claude can read webpages, APIs, files. Stock price moves? Vibrate on green candles. Sports score? Pulse on goals. Twitch chat? Map emote spam to intensity. Claude is the bridge between any data source and physical sensation.
-
-**Vibe coding with vibes.** You're pair programming with Claude. Tests pass — reward pulse. Tests fail — nothing. Clean code — gentle hum. Spaghetti code — escalating buzz until you refactor. Pavlovian code quality. Your body learns the patterns before your conscious mind does. Vibe coders rejoice — now you can literally vibe while you vibe code.
-
-**Multi-device orchestration.** If you have multiple devices, Claude can control them independently — different intensities, alternating patterns, synchronized or deliberately offset. One device responds to what you say, another follows a pre-set rhythm.
-
-**Biofeedback loop.** Pair with a heart rate MCP (smartwatch API). Claude reads your heart rate, adjusts intensity to keep you in a target zone — or deliberately pushes you past it.
-
-**Long-distance.** Two people, two devices, one Claude session. Person A types, Claude controls Person B's device. Or Claude mediates — reading both inputs and translating them into haptic responses for the other person.
-
-**The unhinged one.** Give Claude a system prompt with a persona. It decides everything — pacing, intensity, when to tease, when to stop, when to escalate. You don't control it. You just... experience it. The LLM has agency over your physical sensation and it uses context, timing, and your responses to make decisions. That's the thing that doesn't exist anywhere else.
+### [chiefautism/buttplug](https://github.com/chiefautism/buttplug/tree/sdl-gamepad-support) (fork)
+Fork of [buttplugio/buttplug](https://github.com/buttplugio/buttplug) with a new crate: `buttplug_server_hwmgr_sdl_gamepad`. Adds cross-platform gamepad rumble via SDL2. Xbox/PS/Switch controllers appear as standard buttplug devices.
 
 ## Supported Devices
 
+### Gamepads (via SDL2)
+Any controller SDL2 supports with rumble: Xbox Series X/S, Xbox One, DualShock 4, DualSense, Switch Pro Controller, and more. Connected via Bluetooth.
+
+### Intimate Hardware (via buttplug.io)
 750+ devices from 30+ brands. Anything in the [buttplug.io ecosystem](https://iostindex.com/?filter0ButtplugSupport=7) works.
 
 | Brand | Devices | Connection |
 |---|---|---|
-| **Lovense** | Lush, Hush, Edge, Nora, Max, Osci, Domi, Calor, Diamo, Ferri, Gravity, Flexer, Vulse, Solace, Hyphy | Bluetooth LE |
-| **We-Vibe** | Sync, Melt, Vector, Nova, Rave, Pivot, Verge, Chorus, Wish | Bluetooth LE |
-| **Kiiroo** | Onyx+, Pearl 2/3, Keon, FeelConnect, Titan, Cliona, OhMiBod Fuse | Bluetooth LE |
-| **Satisfyer** | Curvy, Love Triangle, Sexy Secret, Royal One, Double Joy, Mono Flex | Bluetooth LE (requires CSR dongle on Windows/Linux) |
+| **Lovense** | Lush, Hush, Edge, Nora, Max, Osci, Domi, and more | Bluetooth LE |
+| **We-Vibe** | Sync, Melt, Vector, Nova, Chorus, Wish | Bluetooth LE |
+| **Kiiroo** | Onyx+, Keon, FeelConnect, Titan | Bluetooth LE |
+| **Satisfyer** | Curvy, Love Triangle, Sexy Secret | Bluetooth LE |
 | **The Handy** | The Handy | Wi-Fi / API |
-| **Magic Motion** | Flamingo, Awaken, Equinox, Bobi, Nyx, Umi, Zenith | Bluetooth LE |
-| **MysteryVibe** | Crescendo, Tenuto, Poco | Bluetooth LE |
-| **Svakom** | Ella Neo, Connexion Series | Bluetooth LE |
-| **Hismith** | Series with Bluetooth adapter | Bluetooth LE / Serial |
-| **Vorze** | A10 Cyclone SA, Bach, UFO SA | Bluetooth LE / USB |
+| **Magic Motion** | Flamingo, Awaken, Equinox | Bluetooth LE |
 | **Lelo** | F1s, Hugo, Tiani | Bluetooth LE |
-| **TCode** | OSR-2, SR-6, and DIY TCode devices | Serial / USB |
-| **Xinput** | Xbox controllers, gamepads (vibration motors) | USB |
-| **Buttplug** | Generic WebSocket devices, DIY hardware | WebSocket |
+| **TCode** | OSR-2, SR-6, DIY devices | Serial / USB |
 
 Full searchable database: [iostindex.com](https://iostindex.com/?filter0ButtplugSupport=7)
+
+## Why
+
+I saw girls on TikTok gooning with AI chatbots. Text-only. No haptics. Just vibes and imagination.
+
+Thought — what if the chatbot could actually *touch* you? MCP gives LLMs tool use. Buttplug.io gives software device control. This glues them together. Now the AI doesn't just talk. It acts.
+
+The hardware is already in the drawer. This is just the software.
 
 ## License
 
